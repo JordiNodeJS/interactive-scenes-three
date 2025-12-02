@@ -1,7 +1,7 @@
 ## Quick Overview
 
 - **Purpose:** Interactive 3D scenes using React + Three.js with hand-driven controls via MediaPipe Hands.
-- **Main runtime:** Vite dev server (`npm run dev`). Production build uses `tsc -b && vite build`.
+- **Main runtime:** Vite dev server (`pnpm dev`). Production build uses `tsc -b && vite build`.
 
 ## Big Picture Architecture
 
@@ -29,9 +29,9 @@
 
 ## Build / Dev / Debug Workflow
 
-- Dev server: `npm run dev` (Vite). Open the app in the browser and watch the console for runtime shader / WebGL errors.
-- Full build: `npm run build` (runs `tsc -b && vite build`). Use `npm run preview` to inspect the production build locally.
-- Lint: `npm run lint` (runs `eslint .`).
+- Dev server: `pnpm run dev` (Vite). Open the app in the browser and watch the console for runtime shader / WebGL errors.
+- Full build: `pnpm run build` (runs `tsc -b && vite build`). Use `pnpm run preview` to inspect the production build locally.
+- Lint: `pnpm run lint` (runs `eslint .`).
 - TypeScript: `tsconfig.json` and `tsconfig.app.json` are present — `build` uses `tsc -b` so be mindful of composite project settings if you add references.
 
 ## Integration Points & External Dependencies
