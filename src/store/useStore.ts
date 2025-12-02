@@ -14,6 +14,7 @@ interface AppState {
   setHandRotation: (rotation: number) => void;
   setHandPosition: (position: { x: number, y: number }) => void;
   setCurrentGesture: (gesture: string) => void;
+  setHandState: (state: Partial<Omit<AppState, 'setHandTension' | 'setIsHandDetected' | 'setHandRotation' | 'setHandPosition' | 'setCurrentGesture' | 'setIsCameraActive' | 'setShape' | 'setParticleColor' | 'setHandState'>>) => void;
 
   // Camera State
   isCameraActive: boolean;
@@ -37,6 +38,7 @@ export const useStore = create<AppState>((set) => ({
   setHandRotation: (rotation) => set({ handRotation: rotation }),
   setHandPosition: (position) => set({ handPosition: position }),
   setCurrentGesture: (gesture) => set({ currentGesture: gesture }),
+  setHandState: (newState) => set((state) => ({ ...state, ...newState })),
 
   isCameraActive: true,
   setIsCameraActive: (active) => set({ isCameraActive: active }),
