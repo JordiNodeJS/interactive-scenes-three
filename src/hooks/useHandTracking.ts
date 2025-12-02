@@ -5,7 +5,16 @@ import { useStore } from '../store/useStore';
 
 export const useHandTracking = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { setHandTension, setIsHandDetected } = useStore();
+  const handsRef = useRef<Hands | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
+  const { 
+    setHandTension, 
+    setIsHandDetected, 
+    setHandRotation, 
+    setHandPosition,
+    isCameraActive,
+    setCurrentGesture
+  } = useStore();
 
   useEffect(() => {
     const hands = new Hands({
@@ -22,35 +31,92 @@ export const useHandTracking = () => {
     });
 
     hands.onResults(onResults);
-
-    if (videoRef.current) {
-      const camera = new Camera(videoRef.current, {
-        onFrame: async () => {
-          if (videoRef.current) {
-            await hands.send({ image: videoRef.current });
-          }
-        },
-        width: 640,
-        height: 480,
-      });
-      camera.start();
-    }
+    handsRef.current = hands;
 
     return () => {
       hands.close();
     };
   }, []);
 
+  // Handle Camera Toggle
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && handsRef.current) {
+      if (!cameraRef.current) {
+        const camera = new Camera(videoRef.current, {
+          onFrame: async () => {
+            if (videoRef.current && handsRef.current) {
+              await handsRef.current.send({ image: videoRef.current });
+            }
+          },
+          width: 640,
+          height: 480,
+        });
+        cameraRef.current = camera;
+        camera.start();
+      }
+    } else {
+      if (cameraRef.current) {
+        // Try to stop the tracks manually as Camera util might not fully stop
+        if (videoRef.current && videoRef.current.srcObject) {
+             const stream = videoRef.current.srcObject as MediaStream;
+             const tracks = stream.getTracks();
+             tracks.forEach(track => track.stop());
+             videoRef.current.srcObject = null;
+        }
+        cameraRef.current = null;
+        setIsHandDetected(false);
+        setCurrentGesture('None');
+      }
+    }
+  }, [isCameraActive]);
+
+  const detectGesture = (landmarks: any[], tension: number) => {
+      // Simple gesture detection
+      if (tension > 0.9) return 'Closed Fist';
+      if (tension < 0.1) return 'Open Hand';
+
+      // Detect Victory (Index and Middle up)
+      // Landmark indices: Wrist=0, IndexTip=8, IndexPIP=6, MiddleTip=12, MiddlePIP=10, RingTip=16, PinkyTip=20
+      // Check distances from wrist to tip vs wrist to PIP?
+      // Or just simple y check if hand is upright. 
+      // Let's use distance from wrist. Extended finger tip is far from wrist. Folded is close.
+      
+      const wrist = landmarks[0];
+      const dist = (idx: number) => {
+          const p = landmarks[idx];
+          return Math.sqrt(Math.pow(p.x - wrist.x, 2) + Math.pow(p.y - wrist.y, 2));
+      };
+
+      // Normalize by palm size (Wrist to Middle MCP (9))
+      const palmSize = dist(9);
+      
+      const isExtended = (tipIdx: number, pipIdx: number) => {
+          return dist(tipIdx) > dist(pipIdx) + 0.1 * palmSize; // Simple heuristic
+      };
+
+      // Better: Check if tip is further from wrist than PIP
+      // This works regardless of rotation mostly
+      
+      const indexExt = dist(8) > dist(6);
+      const middleExt = dist(12) > dist(10);
+      const ringExt = dist(16) > dist(14);
+      const pinkyExt = dist(20) > dist(18);
+      const thumbExt = dist(4) > dist(2); // Thumb is tricky, but roughly
+
+      if (indexExt && middleExt && !ringExt && !pinkyExt) return 'Victory';
+      if (indexExt && !middleExt && !ringExt && !pinkyExt) return 'Pointing';
+      if (indexExt && !middleExt && !ringExt && pinkyExt && thumbExt) return 'Rock'; // Rock/Devil horns
+      if (!indexExt && !middleExt && !ringExt && !pinkyExt && thumbExt) return 'Thumbs Up'; // Maybe
+
+      return 'Unknown';
+  };
+
   const onResults = (results: Results) => {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       setIsHandDetected(true);
       const landmarks = results.multiHandLandmarks[0];
       
-      // Calculate tension based on distance between fingertips and palm base (wrist)
-      // This is a simplified approximation.
-      // Wrist: 0
-      // Tips: 4 (Thumb), 8 (Index), 12 (Middle), 16 (Ring), 20 (Pinky)
-      
+      // 1. Calculate Tension
       const wrist = landmarks[0];
       const tips = [4, 8, 12, 16, 20];
       
@@ -65,23 +131,37 @@ export const useHandTracking = () => {
         totalDist += dist;
       });
 
-      // Normalize tension
-      // Open hand average dist is roughly 0.3 - 0.5 depending on Z
-      // Closed hand is roughly 0.1 - 0.2
-      // We'll map this range to 0-1
-      // Note: These values might need tuning based on testing
-      
-      const maxOpenDist = 2.0; // Sum of 5 fingers
+      const maxOpenDist = 2.0; 
       const minClosedDist = 0.5;
       
-      // Invert because smaller distance = higher tension (closed)
       let tension = 1 - ((totalDist - minClosedDist) / (maxOpenDist - minClosedDist));
       tension = Math.max(0, Math.min(1, tension));
-      
       setHandTension(tension);
+
+      // Detect Gesture
+      const gesture = detectGesture(landmarks, tension);
+      setCurrentGesture(gesture);
+
+      // 2. Calculate Hand Position (Center of palm approx)
+      const middleMCP = landmarks[9];
+      const centerX = (wrist.x + middleMCP.x) / 2;
+      const centerY = (wrist.y + middleMCP.y) / 2;
+      
+      const posX = (centerX - 0.5) * 2;
+      const posY = -(centerY - 0.5) * 2; 
+      
+      setHandPosition({ x: posX, y: posY });
+
+      // 3. Calculate Hand Rotation (Roll)
+      const dx = middleMCP.x - wrist.x;
+      const dy = middleMCP.y - wrist.y;
+      const rotation = Math.atan2(dy, dx) + Math.PI / 2;
+      setHandRotation(-rotation); 
+
     } else {
       setIsHandDetected(false);
       setHandTension(0);
+      setCurrentGesture('None');
     }
   };
 
