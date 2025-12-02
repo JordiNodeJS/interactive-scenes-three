@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore, type ShapeType } from '../../store/useStore';
-import { Heart, Flower, Globe, Sparkles, Smile, Tornado, Box, Triangle, Dna } from 'lucide-react';
+import { Heart, Flower, Globe, Sparkles, Smile, Tornado, Box, Triangle, Dna, Camera, CameraOff } from 'lucide-react';
 
 const shapes: { id: ShapeType; icon: React.ReactNode; label: string }[] = [
   { id: 'heart', icon: <Heart size={20} />, label: 'Heart' },
@@ -24,7 +24,17 @@ const colors = [
 ];
 
 export const UIOverlay = () => {
-  const { currentShape, setShape, particleColor, setParticleColor, isHandDetected, handTension } = useStore();
+  const { 
+    currentShape, 
+    setShape, 
+    particleColor, 
+    setParticleColor, 
+    isHandDetected, 
+    handTension,
+    isCameraActive,
+    setIsCameraActive,
+    currentGesture
+  } = useStore();
 
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
@@ -35,12 +45,31 @@ export const UIOverlay = () => {
           <p className="text-white/60 text-sm">Interactive 3D System</p>
         </div>
         
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-col items-end gap-2 pointer-events-auto">
+          <button 
+            onClick={() => setIsCameraActive(!isCameraActive)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              isCameraActive 
+                ? 'bg-white/10 hover:bg-white/20 text-white' 
+                : 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+            }`}
+          >
+            {isCameraActive ? <Camera size={14} /> : <CameraOff size={14} />}
+            {isCameraActive ? 'CAMERA ON' : 'CAMERA OFF'}
+          </button>
+
           <div className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
             isHandDetected ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
           }`}>
             {isHandDetected ? 'HAND DETECTED' : 'NO HAND DETECTED'}
           </div>
+
+           {/* Gesture Display */}
+           <div className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 border border-white/10 bg-black/20 text-white/80 flex items-center gap-2 ${isHandDetected ? 'opacity-100' : 'opacity-0'}`}>
+             <span>GESTURE:</span>
+             <span className="text-white font-bold uppercase">{currentGesture}</span>
+          </div>
+
           {/* Tension Bar - Always rendered to prevent layout shift but controlled opacity/visibility */}
           <div className={`flex items-center gap-2 transition-opacity duration-300 ${isHandDetected ? 'opacity-100' : 'opacity-0'}`}>
              <span className="text-white/50 text-xs">TENSION</span>
