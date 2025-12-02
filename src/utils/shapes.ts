@@ -1,4 +1,3 @@
-
 export const generateHeart = (count: number, _radius: number = 10) => {
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
@@ -108,6 +107,80 @@ export const generateFireworks = (count: number, _radius: number = 15) => {
             positions[idx+1] = cy + r * Math.sin(phi) * Math.sin(theta);
             positions[idx+2] = cz + r * Math.cos(phi);
         }
+    }
+    return positions;
+}
+
+export const generateSpiral = (count: number, radius: number = 10) => {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+        const t = i / count;
+        const angle = t * Math.PI * 20; // 10 rotations
+        const r = t * radius;
+        const h = (t - 0.5) * 20; // Height
+
+        // Perturbation
+        const noise = (Math.random() - 0.5) * 0.5;
+
+        positions[i * 3] = (r + noise) * Math.cos(angle);
+        positions[i * 3 + 1] = h;
+        positions[i * 3 + 2] = (r + noise) * Math.sin(angle);
+    }
+    return positions;
+}
+
+export const generateCube = (count: number, size: number = 12) => {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * size;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * size;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * size;
+    }
+    return positions;
+}
+
+export const generatePyramid = (count: number, height: number = 15) => {
+    const positions = new Float32Array(count * 3);
+    const baseSize = height; // Base width same as height roughly
+
+    for (let i = 0; i < count; i++) {
+        const y = (Math.random() - 0.5) * height; // -7.5 to 7.5
+        // Height from base (0 at bottom, height at top)
+        // Let's make y range from 0 to height for simpler math, then shift
+        const h = Math.random() * height; 
+        
+        // At h=0 (base), radius is max. At h=height (tip), radius is 0.
+        const currentRadius = (1 - (h / height)) * (baseSize / 2);
+        
+        const x = (Math.random() - 0.5) * 2 * currentRadius;
+        const z = (Math.random() - 0.5) * 2 * currentRadius;
+
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = h - height/2; // Center vertically
+        positions[i * 3 + 2] = z;
+    }
+    return positions;
+}
+
+export const generateDNA = (count: number, height: number = 20) => {
+    const positions = new Float32Array(count * 3);
+    const radius = 4;
+    const turns = 4;
+    
+    for (let i = 0; i < count; i++) {
+        const t = Math.random();
+        const angle = t * Math.PI * 2 * turns;
+        const y = (t - 0.5) * height;
+        
+        // Two strands offset by PI
+        const strand = Math.random() > 0.5 ? 0 : Math.PI;
+        
+        // Add thickness to strands
+        const r = radius + (Math.random() - 0.5);
+        
+        positions[i * 3] = r * Math.cos(angle + strand);
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = r * Math.sin(angle + strand);
     }
     return positions;
 }
