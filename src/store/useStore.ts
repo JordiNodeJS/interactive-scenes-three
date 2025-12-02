@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ShapeType = 'heart' | 'flower' | 'saturn' | 'buddha' | 'fireworks';
+export type ShapeType = 'heart' | 'flower' | 'saturn' | 'buddha' | 'fireworks' | 'spiral' | 'cube' | 'pyramid' | 'dna';
 
 interface AppState {
   // Hand State

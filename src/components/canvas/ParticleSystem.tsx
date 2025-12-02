@@ -2,7 +2,7 @@ import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../../store/useStore';
-import { generateHeart, generateSphere, generateSaturn, generateFlower, generateFireworks } from '../../utils/shapes';
+import { generateHeart, generateSphere, generateSaturn, generateFlower, generateFireworks, generateSpiral, generateCube, generatePyramid, generateDNA } from '../../utils/shapes';
 
 const PARTICLE_COUNT = 20000;
 
@@ -72,6 +72,10 @@ export const ParticleSystem = () => {
     saturn: generateSaturn(PARTICLE_COUNT),
     buddha: generateSphere(PARTICLE_COUNT), // Placeholder for Buddha, using Sphere for now
     fireworks: generateFireworks(PARTICLE_COUNT),
+    spiral: generateSpiral(PARTICLE_COUNT),
+    cube: generateCube(PARTICLE_COUNT),
+    pyramid: generatePyramid(PARTICLE_COUNT),
+    dna: generateDNA(PARTICLE_COUNT),
   }), []);
 
   const geometry = useMemo(() => {

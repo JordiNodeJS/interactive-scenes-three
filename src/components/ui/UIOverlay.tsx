@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore, type ShapeType } from '../../store/useStore';
-import { Heart, Flower, Globe, Sparkles, Smile } from 'lucide-react';
+import { Heart, Flower, Globe, Sparkles, Smile, Tornado, Box, Triangle, Dna } from 'lucide-react';
 
 const shapes: { id: ShapeType; icon: React.ReactNode; label: string }[] = [
   { id: 'heart', icon: <Heart size={20} />, label: 'Heart' },
@@ -8,6 +8,10 @@ const shapes: { id: ShapeType; icon: React.ReactNode; label: string }[] = [
   { id: 'saturn', icon: <Globe size={20} />, label: 'Saturn' },
   { id: 'buddha', icon: <Smile size={20} />, label: 'Buddha' },
   { id: 'fireworks', icon: <Sparkles size={20} />, label: 'Fireworks' },
+  { id: 'spiral', icon: <Tornado size={20} />, label: 'Spiral' },
+  { id: 'cube', icon: <Box size={20} />, label: 'Cube' },
+  { id: 'pyramid', icon: <Triangle size={20} />, label: 'Pyramid' },
+  { id: 'dna', icon: <Dna size={20} />, label: 'DNA' },
 ];
 
 const colors = [
@@ -23,9 +27,9 @@ export const UIOverlay = () => {
   const { currentShape, setShape, particleColor, setParticleColor, isHandDetected, handTension } = useStore();
 
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 z-10">
+    <div className="absolute inset-0 pointer-events-none z-10">
       {/* Header / Status */}
-      <div className="flex justify-between items-start">
+      <div className="absolute top-6 left-6 right-6 flex justify-between items-start">
         <div>
           <h1 className="text-white text-2xl font-bold tracking-wider mb-1">PARTICLE FLOW</h1>
           <p className="text-white/60 text-sm">Interactive 3D System</p>
@@ -37,32 +41,31 @@ export const UIOverlay = () => {
           }`}>
             {isHandDetected ? 'HAND DETECTED' : 'NO HAND DETECTED'}
           </div>
-          {isHandDetected && (
-             <div className="flex items-center gap-2">
-                <span className="text-white/50 text-xs">TENSION</span>
-                <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-white transition-all duration-100"
-                        style={{ width: `${handTension * 100}%` }}
-                    />
-                </div>
+          {/* Tension Bar - Always rendered to prevent layout shift but controlled opacity/visibility */}
+          <div className={`flex items-center gap-2 transition-opacity duration-300 ${isHandDetected ? 'opacity-100' : 'opacity-0'}`}>
+             <span className="text-white/50 text-xs">TENSION</span>
+             <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
+                 <div 
+                     className="h-full bg-white transition-all duration-100"
+                     style={{ width: `${handTension * 100}%` }}
+                 />
              </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-col gap-6 pointer-events-auto items-start">
+      {/* Controls - Fixed Position at Bottom Left */}
+      <div className="absolute bottom-24 left-6 flex flex-col gap-6 pointer-events-auto items-start">
         
         {/* Shape Selector */}
         <div className="bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10">
           <h3 className="text-white/50 text-xs font-bold mb-3 uppercase tracking-wider">Shape</h3>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {shapes.map((shape) => (
               <button
                 key={shape.id}
                 onClick={() => setShape(shape.id)}
-                className={`p-3 rounded-xl transition-all duration-300 flex flex-col items-center gap-1 group ${
+                className={`p-3 rounded-xl transition-all duration-300 flex flex-col items-center gap-1 group relative ${
                   currentShape === shape.id 
                     ? 'bg-white/20 text-white shadow-lg shadow-white/5' 
                     : 'bg-transparent text-white/40 hover:bg-white/5 hover:text-white/80'
@@ -70,7 +73,7 @@ export const UIOverlay = () => {
                 title={shape.label}
               >
                 {shape.icon}
-                <span className="text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity absolute -bottom-4 whitespace-nowrap">
+                <span className="text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity absolute -bottom-4 whitespace-nowrap bg-black/80 px-2 py-1 rounded pointer-events-none z-20">
                     {shape.label}
                 </span>
               </button>
@@ -98,7 +101,7 @@ export const UIOverlay = () => {
       </div>
       
       {/* Footer / Instructions */}
-      <div className="text-white/30 text-xs text-center">
+      <div className="absolute bottom-6 left-0 right-0 text-white/30 text-xs text-center">
         <p>Show your hand to interact. Close hand to expand particles.</p>
       </div>
     </div>
