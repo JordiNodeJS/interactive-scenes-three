@@ -49,18 +49,22 @@
 ## Quick Examples
 
 - Add shape (pseudo):
+
 ```ts
 // src/utils/shapes.ts
-export const generateMyShape = (count:number) => { /* return Float32Array */ }
+export const generateMyShape = (count: number) => {
+  /* return Float32Array */
+};
 // src/store/useStore.ts -> add 'myshape' to ShapeType
 // src/components/canvas/ParticleSystem.tsx -> add to SHAPES mapping
 ```
 
 - Tune gesture threshold:
+
 ```ts
 // src/hooks/useHandTracking.ts
 // change minDetectionConfidence or stabilizer count
-hands.setOptions({ minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 })
+hands.setOptions({ minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
 ```
 
 ## What I could not discover automatically

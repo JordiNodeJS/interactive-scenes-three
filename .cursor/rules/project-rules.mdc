@@ -9,37 +9,48 @@ Interactive 3D particle system using React Three Fiber, MediaPipe hand tracking,
 ## State Management Pattern
 
 - **Single source of truth**: `src/store/useStore.ts` (Zustand store)
-- **State shape**: Hand tracking (`handTension`, `isHandDetected`), visual state (`currentShape`, `particleColor`)
-- **Update pattern**: Hooks (`useHandTracking`) and UI components update store; 3D components read via `useStore()` hook
-- **Shape types**: `'heart' | 'flower' | 'saturn' | 'buddha' | 'fireworks'` (defined in store)
+- **State shape**: Hand tracking (`handTension`, `isHandDetected`, `handRotation`, `handPosition`, `currentGesture`), visual state (`currentShape`, `particleColor`), camera (`isCameraActive`)
+- **Update pattern**: 
+  - Hooks (`useHandTracking`) use `setHandState()` for batch updates (merges partial state)
+  - UI components call individual setters (`setShape`, `setParticleColor`)
+  - 3D components read stable state via `useStore()` hook (triggers re-renders)
+  - **Critical**: Per-frame values (hand position, rotation, tension) are read via `useStore.getState()` inside `useFrame` to avoid React re-renders
+- **Shape types**: `'heart' | 'flower' | 'saturn' | 'buddha' | 'fireworks' | 'spiral' | 'cube' | 'pyramid' | 'dna'` (defined in `useStore.ts`)
 
 ## Component Architecture
 
 - **Canvas components** (`src/components/canvas/`): React Three Fiber components (`Scene`, `ParticleSystem`)
-- **UI components** (`src/components/ui/`): Overlay controls (`UIOverlay`)
+- **UI components** (`src/components/ui/`): Overlay controls (`UIOverlay`) with shape/color selectors and hand status
 - **Hooks** (`src/hooks/`): Custom hooks (`useHandTracking`) that integrate external APIs
-- **Utils** (`src/utils/`): Pure functions for shape generation (`shapes.ts`)
+- **Utils** (`src/utils/`): Pure functions for shape generation (`shapes.ts`) - all return `Float32Array(count * 3)`
 
 ## Hand Tracking Integration
 
 - **Hook**: `src/hooks/useHandTracking.ts` initializes MediaPipe Hands, processes video frames
 - **Video element**: Hidden `<video>` in `App.tsx` (opacity-0, 1px) for camera capture
-- **Tension calculation**: Distance between fingertips and wrist, normalized 0-1 (0=open, 1=closed)
-- **State updates**: Calls `setHandTension()` and `setIsHandDetected()` on each frame
+- **Tension calculation**: Distance between fingertips (4,8,12,16,20) and wrist, normalized 0-1 (0=open, 1=closed) with smoothing (alpha=0.2)
+- **Position calculation**: Center of palm (wrist + middle MCP) normalized to -1 to 1 range
+- **Rotation calculation**: Roll angle from wrist to middle MCP
+- **Gesture detection**: Stabilizer pattern (pendingGesture + count) requiring 4+ consecutive frames to switch gestures
+- **State updates**: Batch updates via `setHandState()` on each frame, resets on hand loss
 
 ## Particle System Pattern
 
-- **Shader-based morphing**: Uses `position` and `targetPosition` attributes with `uMorphFactor` uniform for smooth transitions
-- **Shape switching**: When `currentShape` changes, `position` = previous shape, `targetPosition` = new shape, `uMorphFactor` animates 0→1
-- **Hand interaction**: `uExpansion` uniform maps `handTension` (0-1) to particle expansion via lerp in `useFrame`
-- **Shape generation**: All shapes in `src/utils/shapes.ts` return `Float32Array(count * 3)` (x,y,z positions)
-- **Performance**: `PARTICLE_COUNT = 20000`, uses `useMemo` for geometry/shapes, GPU-side calculations in shaders
+- **Pre-generated shapes**: All shapes generated at module load in `ParticleSystem.tsx` (`SHAPES` constant) to avoid recalculation and GC churn
+- **Shader-based morphing**: Uses `position` and `targetPosition` attributes with `uMorphFactor` uniform (0→1) for smooth transitions
+- **Shape switching**: When `currentShape` changes, `position` = previous shape, `targetPosition` = new shape, `uMorphFactor` animates 0→1 in `useFrame`
+- **Hand interaction**: 
+  - `uExpansion` uniform maps `handTension` (0-1) to particle expansion via lerp (0.1) in `useFrame`
+  - Hand position controls rotation (X/Y mapped to pitch/yaw, roll mapped to Z)
+  - Auto-rotation when no hand detected
+- **Performance**: `PARTICLE_COUNT = 20000`, uses `useMemo` for geometry, GPU-side calculations in shaders, direct `getState()` reads in render loops
 
 ## Development Workflows
 
 - **Package manager**: Use `pnpm` and `pnpm dlx` (never npm)
-- **Dev server**: `pnpm dev` (Vite HMR)
-- **Build**: `pnpm build` (TypeScript check + Vite build)
+- **Dev server**: `pnpm dev` (Vite HMR) - watch console for WebGL/shader errors
+- **Build**: `pnpm build` (runs `tsc -b && vite build`)
+- **Preview**: `pnpm preview` (inspect production build locally)
 - **Lint**: `pnpm lint` (ESLint with TypeScript)
 
 ## Code Conventions
@@ -48,11 +59,33 @@ Interactive 3D particle system using React Three Fiber, MediaPipe hand tracking,
 - **React patterns**: Functional components, hooks for side effects, `useRef` for Three.js object references
 - **Three.js**: Use `@react-three/fiber` declarative API, `useFrame` for animations, `Suspense` for async loading
 - **Styling**: TailwindCSS utility classes, dark theme (black bg, white/opacity text), backdrop-blur for UI panels
+- **Performance**: Avoid React re-renders from per-frame values - use refs or `useStore.getState()` inside `useFrame`
+- **Shaders**: Inline GLSL strings in `ParticleSystem.tsx`, uniforms updated via `useFrame` (not React state)
+
+## Common Tasks & Where To Edit
+
+- **Add a new shape**: 
+  1. Add generator function in `src/utils/shapes.ts` (returns `Float32Array(count * 3)`)
+  2. Add shape key to `ShapeType` in `src/store/useStore.ts`
+  3. Add to `SHAPES` mapping in `src/components/canvas/ParticleSystem.tsx`
+  4. Add icon/label to `shapes` array in `src/components/ui/UIOverlay.tsx`
+- **Adjust particle appearance**: Edit uniforms / `vertexShader` / `fragmentShader` in `ParticleSystem.tsx`, update how `uExpansion`/`uMorphFactor` are derived
+- **Change gesture mapping**: Edit `detectGesture`, smoothing constants (alpha values), and stabilization logic in `useHandTracking.ts`
+- **Toggle camera/UI controls**: `UIOverlay.tsx` (UI controls) and `useStore.ts` (state toggles like `isCameraActive`)
 
 ## Key Files Reference
 
-- `src/store/useStore.ts` - Global state definition
-- `src/components/canvas/ParticleSystem.tsx` - Core particle rendering with shaders
-- `src/hooks/useHandTracking.ts` - MediaPipe integration
-- `src/utils/shapes.ts` - Shape generation algorithms
-- `src/components/ui/UIOverlay.tsx` - Control panel UI
+- `src/store/useStore.ts` - Global state definition with `setHandState` batch updater
+- `src/components/canvas/ParticleSystem.tsx` - Core particle rendering with shaders, pre-generated shapes
+- `src/hooks/useHandTracking.ts` - MediaPipe integration, gesture detection, smoothing
+- `src/utils/shapes.ts` - Shape generation algorithms (all return `Float32Array`)
+- `src/components/ui/UIOverlay.tsx` - Control panel UI with shape/color selectors
+- `src/components/canvas/Scene.tsx` - Canvas setup with OrbitControls (auto-rotate when no hand)
+
+## Performance Notes / Pitfalls
+
+- Particle count is high (20000). Avoid creating new BufferGeometries every render - use `needsUpdate` on attributes instead
+- Pre-generate shapes at module level (see `SHAPES` constant) to avoid recalculation
+- Avoid React re-renders from per-frame values - use `useStore.getState()` inside `useFrame`, not `useStore()` hook
+- Shader syntax errors appear as runtime WebGL errors in dev console - inspect shader compile logs
+- When editing shaders, test thoroughly as errors only appear at runtime
