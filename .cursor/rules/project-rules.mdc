@@ -1,0 +1,58 @@
+# Interactive Scenes Three - Project Rules
+
+## Architecture Overview
+
+Interactive 3D particle system using React Three Fiber, MediaPipe hand tracking, and shader-based morphing. State flows: MediaPipe → `useHandTracking` hook → Zustand store → `ParticleSystem` component.
+
+**Key Stack**: React 19 + TypeScript + Vite + React Three Fiber + MediaPipe Hands + Zustand + TailwindCSS
+
+## State Management Pattern
+
+- **Single source of truth**: `src/store/useStore.ts` (Zustand store)
+- **State shape**: Hand tracking (`handTension`, `isHandDetected`), visual state (`currentShape`, `particleColor`)
+- **Update pattern**: Hooks (`useHandTracking`) and UI components update store; 3D components read via `useStore()` hook
+- **Shape types**: `'heart' | 'flower' | 'saturn' | 'buddha' | 'fireworks'` (defined in store)
+
+## Component Architecture
+
+- **Canvas components** (`src/components/canvas/`): React Three Fiber components (`Scene`, `ParticleSystem`)
+- **UI components** (`src/components/ui/`): Overlay controls (`UIOverlay`)
+- **Hooks** (`src/hooks/`): Custom hooks (`useHandTracking`) that integrate external APIs
+- **Utils** (`src/utils/`): Pure functions for shape generation (`shapes.ts`)
+
+## Hand Tracking Integration
+
+- **Hook**: `src/hooks/useHandTracking.ts` initializes MediaPipe Hands, processes video frames
+- **Video element**: Hidden `<video>` in `App.tsx` (opacity-0, 1px) for camera capture
+- **Tension calculation**: Distance between fingertips and wrist, normalized 0-1 (0=open, 1=closed)
+- **State updates**: Calls `setHandTension()` and `setIsHandDetected()` on each frame
+
+## Particle System Pattern
+
+- **Shader-based morphing**: Uses `position` and `targetPosition` attributes with `uMorphFactor` uniform for smooth transitions
+- **Shape switching**: When `currentShape` changes, `position` = previous shape, `targetPosition` = new shape, `uMorphFactor` animates 0→1
+- **Hand interaction**: `uExpansion` uniform maps `handTension` (0-1) to particle expansion via lerp in `useFrame`
+- **Shape generation**: All shapes in `src/utils/shapes.ts` return `Float32Array(count * 3)` (x,y,z positions)
+- **Performance**: `PARTICLE_COUNT = 20000`, uses `useMemo` for geometry/shapes, GPU-side calculations in shaders
+
+## Development Workflows
+
+- **Package manager**: Use `pnpm` and `pnpm dlx` (never npm)
+- **Dev server**: `pnpm dev` (Vite HMR)
+- **Build**: `pnpm build` (TypeScript check + Vite build)
+- **Lint**: `pnpm lint` (ESLint with TypeScript)
+
+## Code Conventions
+
+- **TypeScript**: Strict mode, explicit types for store state (`ShapeType`, `AppState`)
+- **React patterns**: Functional components, hooks for side effects, `useRef` for Three.js object references
+- **Three.js**: Use `@react-three/fiber` declarative API, `useFrame` for animations, `Suspense` for async loading
+- **Styling**: TailwindCSS utility classes, dark theme (black bg, white/opacity text), backdrop-blur for UI panels
+
+## Key Files Reference
+
+- `src/store/useStore.ts` - Global state definition
+- `src/components/canvas/ParticleSystem.tsx` - Core particle rendering with shaders
+- `src/hooks/useHandTracking.ts` - MediaPipe integration
+- `src/utils/shapes.ts` - Shape generation algorithms
+- `src/components/ui/UIOverlay.tsx` - Control panel UI
