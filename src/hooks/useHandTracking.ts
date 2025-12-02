@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Hands, type Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 import { useStore } from '../store/useStore';
@@ -16,69 +16,11 @@ export const useHandTracking = () => {
   });
 
   const { 
-    setHandTension, 
-    setIsHandDetected, 
-    setHandRotation, 
-    setHandPosition,
-    isCameraActive,
-    setCurrentGesture
+    setHandState,
+    isCameraActive
   } = useStore();
 
-  useEffect(() => {
-    const hands = new Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      },
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-
-    hands.onResults(onResults);
-    handsRef.current = hands;
-
-    return () => {
-      hands.close();
-    };
-  }, []);
-
-  // Handle Camera Toggle
-  useEffect(() => {
-    if (isCameraActive && videoRef.current && handsRef.current) {
-      if (!cameraRef.current) {
-        const camera = new Camera(videoRef.current, {
-          onFrame: async () => {
-            if (videoRef.current && handsRef.current) {
-              await handsRef.current.send({ image: videoRef.current });
-            }
-          },
-          width: 640,
-          height: 480,
-        });
-        cameraRef.current = camera;
-        camera.start();
-      }
-    } else {
-      if (cameraRef.current) {
-        // Try to stop the tracks manually as Camera util might not fully stop
-        if (videoRef.current && videoRef.current.srcObject) {
-             const stream = videoRef.current.srcObject as MediaStream;
-             const tracks = stream.getTracks();
-             tracks.forEach(track => track.stop());
-             videoRef.current.srcObject = null;
-        }
-        cameraRef.current = null;
-        setIsHandDetected(false);
-        setCurrentGesture('None');
-      }
-    }
-  }, [isCameraActive]);
-
-  const detectGesture = (landmarks: any[], tension: number) => {
+  const detectGesture = useCallback((landmarks: any[], tension: number) => {
       // Simple gesture detection
       if (tension > 0.9) return 'Closed Fist';
       if (tension < 0.1) return 'Open Hand';
@@ -98,13 +40,15 @@ export const useHandTracking = () => {
       // Normalize by palm size (Wrist to Middle MCP (9))
       const palmSize = dist(9);
       
+      // Helper for extension check
       const isExtended = (tipIdx: number, pipIdx: number) => {
-          return dist(tipIdx) > dist(pipIdx) + 0.1 * palmSize; // Simple heuristic
+           return dist(tipIdx) > dist(pipIdx) + 0.1 * palmSize; 
       };
 
       // Better: Check if tip is further from wrist than PIP
       // This works regardless of rotation mostly
       
+      // Using simple distance check relative to wrist for now as it's robust enough for this demo
       const indexExt = dist(8) > dist(6);
       const middleExt = dist(12) > dist(10);
       const ringExt = dist(16) > dist(14);
@@ -117,11 +61,10 @@ export const useHandTracking = () => {
       if (!indexExt && !middleExt && !ringExt && !pinkyExt && thumbExt) return 'Thumbs Up'; // Maybe
 
       return 'Unknown';
-  };
+  }, []);
 
-  const onResults = (results: Results) => {
+  const onResults = useCallback((results: Results) => {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      setIsHandDetected(true);
       const landmarks = results.multiHandLandmarks[0];
       
       // 1. Calculate Tension
@@ -150,18 +93,17 @@ export const useHandTracking = () => {
       const smoothedTension = prevTension.current + (tension - prevTension.current) * alphaTension;
       prevTension.current = smoothedTension;
       
-      setHandTension(smoothedTension);
-
       // Detect Gesture
       const detectedGesture = detectGesture(landmarks, smoothedTension);
       
+      let newGesture = gestureStabilizer.current.pendingGesture;
       // Stabilize Gesture
       const stabilizer = gestureStabilizer.current;
       if (detectedGesture === stabilizer.pendingGesture) {
         stabilizer.count++;
         // Require consecutive frames to switch gesture
         if (stabilizer.count > 4) { 
-          setCurrentGesture(detectedGesture);
+          newGesture = detectedGesture;
         }
       } else {
         stabilizer.pendingGesture = detectedGesture;
@@ -182,29 +124,92 @@ export const useHandTracking = () => {
       const smoothedY = prevPosition.current.y + (posY - prevPosition.current.y) * alphaPos;
       prevPosition.current = { x: smoothedX, y: smoothedY };
 
-      setHandPosition({ x: smoothedX, y: smoothedY });
-
       // 3. Calculate Hand Rotation (Roll)
       const dx = middleMCP.x - wrist.x;
       const dy = middleMCP.y - wrist.y;
-      let rotation = Math.atan2(dy, dx) + Math.PI / 2;
+      const rotation = Math.atan2(dy, dx) + Math.PI / 2;
       
       // Smooth Rotation
       const alphaRot = 0.2;
       const smoothedRot = prevRotation.current + (-rotation - prevRotation.current) * alphaRot;
       prevRotation.current = smoothedRot;
       
-      setHandRotation(smoothedRot); 
+      // Batch update all hand state
+      setHandState({
+        isHandDetected: true,
+        handTension: smoothedTension,
+        handPosition: { x: smoothedX, y: smoothedY },
+        handRotation: smoothedRot,
+        currentGesture: newGesture
+      });
 
     } else {
-      setIsHandDetected(false);
-      setHandTension(0);
-      // Reset stabilizer on loss of tracking? Or keep last? 
-      // Better to reset.
+      // Reset stabilizer on loss of tracking
       gestureStabilizer.current = { pendingGesture: 'None', count: 0 };
-      setCurrentGesture('None');
+      
+      setHandState({
+        isHandDetected: false,
+        handTension: 0,
+        currentGesture: 'None'
+      });
     }
-  };
+  }, [detectGesture, setHandState]);
+
+  useEffect(() => {
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      },
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+
+    hands.onResults(onResults);
+    handsRef.current = hands;
+
+    return () => {
+      hands.close();
+    };
+  }, [onResults]);
+
+  // Handle Camera Toggle
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && handsRef.current) {
+      if (!cameraRef.current) {
+        const camera = new Camera(videoRef.current, {
+          onFrame: async () => {
+            if (videoRef.current && handsRef.current) {
+              await handsRef.current.send({ image: videoRef.current });
+            }
+          },
+          width: 640,
+          height: 480,
+        });
+        cameraRef.current = camera;
+        camera.start();
+      }
+    } else {
+      if (cameraRef.current) {
+        // Try to stop the tracks manually as Camera util might not fully stop
+        if (videoRef.current && videoRef.current.srcObject) {
+             const stream = videoRef.current.srcObject as MediaStream;
+             const tracks = stream.getTracks();
+             tracks.forEach(track => track.stop());
+             videoRef.current.srcObject = null;
+        }
+        cameraRef.current = null;
+        setHandState({
+            isHandDetected: false,
+            currentGesture: 'None'
+        });
+      }
+    }
+  }, [isCameraActive, setHandState]);
 
   return { videoRef };
 };

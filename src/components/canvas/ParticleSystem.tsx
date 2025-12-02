@@ -1,10 +1,28 @@
-import { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../../store/useStore';
 import { generateHeart, generateSphere, generateSaturn, generateFlower, generateFireworks, generateSpiral, generateCube, generatePyramid, generateDNA } from '../../utils/shapes';
 
 const PARTICLE_COUNT = 20000;
+
+// Pre-generate shapes outside component to avoid re-calculation and keep pure render
+// This runs once when the module is loaded
+const SHAPES = {
+  heart: generateHeart(PARTICLE_COUNT),
+  flower: generateFlower(PARTICLE_COUNT),
+  saturn: generateSaturn(PARTICLE_COUNT),
+  buddha: generateSphere(PARTICLE_COUNT), // Placeholder
+  fireworks: generateFireworks(PARTICLE_COUNT),
+  spiral: generateSpiral(PARTICLE_COUNT),
+  cube: generateCube(PARTICLE_COUNT),
+  pyramid: generatePyramid(PARTICLE_COUNT),
+  dna: generateDNA(PARTICLE_COUNT),
+};
+
+const INITIAL_POSITIONS = generateSphere(PARTICLE_COUNT);
+const SIZES = new Float32Array(PARTICLE_COUNT);
+for(let i=0; i<PARTICLE_COUNT; i++) SIZES[i] = Math.random();
 
 const vertexShader = `
   uniform float uTime;
@@ -60,66 +78,48 @@ const fragmentShader = `
 
 export const ParticleSystem = () => {
   const pointsRef = useRef<THREE.Points>(null);
-  const { currentShape, handTension, particleColor, handRotation, handPosition, isHandDetected } = useStore();
+  // Select only stable state that triggers re-renders (Shape/Color)
+  const currentShape = useStore(state => state.currentShape);
+  const particleColor = useStore(state => state.particleColor);
   
-  // Generate initial positions (Sphere as base)
-  const initialPositions = useMemo(() => generateSphere(PARTICLE_COUNT), []);
-  
-  // Generate target positions for all shapes
-  const shapes = useMemo(() => ({
-    heart: generateHeart(PARTICLE_COUNT),
-    flower: generateFlower(PARTICLE_COUNT),
-    saturn: generateSaturn(PARTICLE_COUNT),
-    buddha: generateSphere(PARTICLE_COUNT), // Placeholder for Buddha, using Sphere for now
-    fireworks: generateFireworks(PARTICLE_COUNT),
-    spiral: generateSpiral(PARTICLE_COUNT),
-    cube: generateCube(PARTICLE_COUNT),
-    pyramid: generatePyramid(PARTICLE_COUNT),
-    dna: generateDNA(PARTICLE_COUNT),
-  }), []);
-
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(initialPositions, 3));
-    geo.setAttribute('targetPosition', new THREE.BufferAttribute(initialPositions, 3));
     
-    const sizes = new Float32Array(PARTICLE_COUNT);
-    for(let i=0; i<PARTICLE_COUNT; i++) sizes[i] = Math.random();
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    // Create separate arrays to avoid aliasing bugs
+    const posArray = new Float32Array(INITIAL_POSITIONS);
+    const targetArray = new Float32Array(INITIAL_POSITIONS);
+    
+    geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    geo.setAttribute('targetPosition', new THREE.BufferAttribute(targetArray, 3));
+    
+    geo.setAttribute('size', new THREE.BufferAttribute(SIZES, 1));
     
     return geo;
-  }, [initialPositions]);
+  }, []);
 
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
     uExpansion: { value: 0 },
     uMorphFactor: { value: 0 },
     uColor: { value: new THREE.Color(particleColor) }
-  }), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []); // particleColor dependency removed as we update it in useFrame
 
-  // Handle shape changes
-  useEffect(() => {
-    if (pointsRef.current) {
-      const targetAttr = pointsRef.current.geometry.attributes.targetPosition as THREE.BufferAttribute;
-      const newPositions = shapes[currentShape as keyof typeof shapes] || shapes.heart;
-      
-      targetAttr.set(newPositions);
-      targetAttr.needsUpdate = true;
-    }
-  }, [currentShape, shapes]);
-  
   // We need a ref to track the previous shape to set the 'from' positions
   const prevShapeRef = useRef<string>('heart');
 
+  // Handle shape changes
   useEffect(() => {
      if (pointsRef.current && currentShape !== prevShapeRef.current) {
          const geometry = pointsRef.current.geometry;
-         const prevPositions = shapes[prevShapeRef.current as keyof typeof shapes] || shapes.heart;
-         const newPositions = shapes[currentShape as keyof typeof shapes] || shapes.heart;
+         const prevPositions = SHAPES[prevShapeRef.current as keyof typeof SHAPES] || SHAPES.heart;
+         const newPositions = SHAPES[currentShape as keyof typeof SHAPES] || SHAPES.heart;
          
+         // Set current positions to where we were coming FROM
          (geometry.attributes.position as THREE.BufferAttribute).set(prevPositions);
          geometry.attributes.position.needsUpdate = true;
          
+         // Set target positions to where we are going TO
          (geometry.attributes.targetPosition as THREE.BufferAttribute).set(newPositions);
          geometry.attributes.targetPosition.needsUpdate = true;
          
@@ -130,10 +130,14 @@ export const ParticleSystem = () => {
          
          prevShapeRef.current = currentShape;
      }
-  }, [currentShape, shapes]);
+  }, [currentShape]);
 
   useFrame((state) => {
     const { clock } = state;
+    
+    // Read transient state directly to avoid re-renders
+    const { handTension, handRotation, handPosition, isHandDetected } = useStore.getState();
+
     if (pointsRef.current && pointsRef.current.material instanceof THREE.ShaderMaterial) {
       pointsRef.current.material.uniforms.uTime.value = clock.getElapsedTime();
       
