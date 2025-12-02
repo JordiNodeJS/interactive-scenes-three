@@ -7,6 +7,14 @@ export const useHandTracking = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const handsRef = useRef<Hands | null>(null);
   const cameraRef = useRef<Camera | null>(null);
+  const prevTension = useRef(0);
+  const prevPosition = useRef({ x: 0, y: 0 });
+  const prevRotation = useRef(0);
+  const gestureStabilizer = useRef({
+    pendingGesture: 'None',
+    count: 0
+  });
+
   const { 
     setHandTension, 
     setIsHandDetected, 
@@ -136,11 +144,29 @@ export const useHandTracking = () => {
       
       let tension = 1 - ((totalDist - minClosedDist) / (maxOpenDist - minClosedDist));
       tension = Math.max(0, Math.min(1, tension));
-      setHandTension(tension);
+      
+      // Smooth Tension
+      const alphaTension = 0.2;
+      const smoothedTension = prevTension.current + (tension - prevTension.current) * alphaTension;
+      prevTension.current = smoothedTension;
+      
+      setHandTension(smoothedTension);
 
       // Detect Gesture
-      const gesture = detectGesture(landmarks, tension);
-      setCurrentGesture(gesture);
+      const detectedGesture = detectGesture(landmarks, smoothedTension);
+      
+      // Stabilize Gesture
+      const stabilizer = gestureStabilizer.current;
+      if (detectedGesture === stabilizer.pendingGesture) {
+        stabilizer.count++;
+        // Require consecutive frames to switch gesture
+        if (stabilizer.count > 4) { 
+          setCurrentGesture(detectedGesture);
+        }
+      } else {
+        stabilizer.pendingGesture = detectedGesture;
+        stabilizer.count = 0;
+      }
 
       // 2. Calculate Hand Position (Center of palm approx)
       const middleMCP = landmarks[9];
@@ -150,17 +176,32 @@ export const useHandTracking = () => {
       const posX = (centerX - 0.5) * 2;
       const posY = -(centerY - 0.5) * 2; 
       
-      setHandPosition({ x: posX, y: posY });
+      // Smooth Position
+      const alphaPos = 0.2;
+      const smoothedX = prevPosition.current.x + (posX - prevPosition.current.x) * alphaPos;
+      const smoothedY = prevPosition.current.y + (posY - prevPosition.current.y) * alphaPos;
+      prevPosition.current = { x: smoothedX, y: smoothedY };
+
+      setHandPosition({ x: smoothedX, y: smoothedY });
 
       // 3. Calculate Hand Rotation (Roll)
       const dx = middleMCP.x - wrist.x;
       const dy = middleMCP.y - wrist.y;
-      const rotation = Math.atan2(dy, dx) + Math.PI / 2;
-      setHandRotation(-rotation); 
+      let rotation = Math.atan2(dy, dx) + Math.PI / 2;
+      
+      // Smooth Rotation
+      const alphaRot = 0.2;
+      const smoothedRot = prevRotation.current + (-rotation - prevRotation.current) * alphaRot;
+      prevRotation.current = smoothedRot;
+      
+      setHandRotation(smoothedRot); 
 
     } else {
       setIsHandDetected(false);
       setHandTension(0);
+      // Reset stabilizer on loss of tracking? Or keep last? 
+      // Better to reset.
+      gestureStabilizer.current = { pendingGesture: 'None', count: 0 };
       setCurrentGesture('None');
     }
   };

@@ -23,6 +23,17 @@ const colors = [
   '#ffffff', // White
 ];
 
+const gestureIcons: Record<string, string> = {
+  'Closed Fist': '✊',
+  'Open Hand': '✋',
+  'Victory': '✌️',
+  'Pointing': '☝️',
+  'Rock': '🤘',
+  'Thumbs Up': '👍',
+  'Unknown': '❓',
+  'None': ''
+};
+
 export const UIOverlay = () => {
   const { 
     currentShape, 
@@ -67,7 +78,10 @@ export const UIOverlay = () => {
            {/* Gesture Display */}
            <div className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 border border-white/10 bg-black/20 text-white/80 flex items-center gap-2 ${isHandDetected ? 'opacity-100' : 'opacity-0'}`}>
              <span>GESTURE:</span>
-             <span className="text-white font-bold uppercase">{currentGesture}</span>
+             <div className="flex items-center gap-2">
+               <span className="text-lg leading-none">{gestureIcons[currentGesture] || ''}</span>
+               <span className="text-white font-bold uppercase">{currentGesture}</span>
+             </div>
           </div>
 
           {/* Tension Bar - Always rendered to prevent layout shift but controlled opacity/visibility */}
