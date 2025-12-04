@@ -1,8 +1,18 @@
-import React, { useRef, useMemo, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { useStore } from '../../store/useStore';
-import { generateHeart, generateSphere, generateSaturn, generateFlower, generateFireworks, generateSpiral, generateCube, generatePyramid, generateDNA } from '../../utils/shapes';
+import { useRef, useMemo, useEffect } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { useStore } from "../../store/useStore";
+import {
+  generateHeart,
+  generateSphere,
+  generateSaturn,
+  generateFlower,
+  generateFireworks,
+  generateSpiral,
+  generateCube,
+  generatePyramid,
+  generateDNA,
+} from "../../utils/shapes";
 
 const PARTICLE_COUNT = 20000;
 
@@ -22,7 +32,7 @@ const SHAPES = {
 
 const INITIAL_POSITIONS = generateSphere(PARTICLE_COUNT);
 const SIZES = new Float32Array(PARTICLE_COUNT);
-for(let i=0; i<PARTICLE_COUNT; i++) SIZES[i] = Math.random();
+for (let i = 0; i < PARTICLE_COUNT; i++) SIZES[i] = Math.random();
 
 const vertexShader = `
   uniform float uTime;
@@ -79,78 +89,100 @@ const fragmentShader = `
 export const ParticleSystem = () => {
   const pointsRef = useRef<THREE.Points>(null);
   // Select only stable state that triggers re-renders (Shape/Color)
-  const currentShape = useStore(state => state.currentShape);
-  const particleColor = useStore(state => state.particleColor);
-  
+  const currentShape = useStore((state) => state.currentShape);
+  const particleColor = useStore((state) => state.particleColor);
+
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    
+
     // Create separate arrays to avoid aliasing bugs
     const posArray = new Float32Array(INITIAL_POSITIONS);
     const targetArray = new Float32Array(INITIAL_POSITIONS);
-    
-    geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-    geo.setAttribute('targetPosition', new THREE.BufferAttribute(targetArray, 3));
-    
-    geo.setAttribute('size', new THREE.BufferAttribute(SIZES, 1));
-    
+
+    geo.setAttribute("position", new THREE.BufferAttribute(posArray, 3));
+    geo.setAttribute(
+      "targetPosition",
+      new THREE.BufferAttribute(targetArray, 3)
+    );
+
+    geo.setAttribute("size", new THREE.BufferAttribute(SIZES, 1));
+
     return geo;
   }, []);
 
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uExpansion: { value: 0 },
-    uMorphFactor: { value: 0 },
-    uColor: { value: new THREE.Color(particleColor) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []); // particleColor dependency removed as we update it in useFrame
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uExpansion: { value: 0 },
+      uMorphFactor: { value: 0 },
+      uColor: { value: new THREE.Color(particleColor) },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }),
+    []
+  ); // particleColor dependency removed as we update it in useFrame
 
   // We need a ref to track the previous shape to set the 'from' positions
-  const prevShapeRef = useRef<string>('heart');
+  const prevShapeRef = useRef<string>("heart");
 
   // Handle shape changes
   useEffect(() => {
-     if (pointsRef.current && currentShape !== prevShapeRef.current) {
-         const geometry = pointsRef.current.geometry;
-         const prevPositions = SHAPES[prevShapeRef.current as keyof typeof SHAPES] || SHAPES.heart;
-         const newPositions = SHAPES[currentShape as keyof typeof SHAPES] || SHAPES.heart;
-         
-         // Set current positions to where we were coming FROM
-         (geometry.attributes.position as THREE.BufferAttribute).set(prevPositions);
-         geometry.attributes.position.needsUpdate = true;
-         
-         // Set target positions to where we are going TO
-         (geometry.attributes.targetPosition as THREE.BufferAttribute).set(newPositions);
-         geometry.attributes.targetPosition.needsUpdate = true;
-         
-         // Reset morph factor to 0, we will animate it to 1 in useFrame
-         if (pointsRef.current.material instanceof THREE.ShaderMaterial) {
-             pointsRef.current.material.uniforms.uMorphFactor.value = 0;
-         }
-         
-         prevShapeRef.current = currentShape;
-     }
+    if (pointsRef.current && currentShape !== prevShapeRef.current) {
+      const geometry = pointsRef.current.geometry;
+      const prevPositions =
+        SHAPES[prevShapeRef.current as keyof typeof SHAPES] || SHAPES.heart;
+      const newPositions =
+        SHAPES[currentShape as keyof typeof SHAPES] || SHAPES.heart;
+
+      // Set current positions to where we were coming FROM
+      (geometry.attributes.position as THREE.BufferAttribute).set(
+        prevPositions
+      );
+      geometry.attributes.position.needsUpdate = true;
+
+      // Set target positions to where we are going TO
+      (geometry.attributes.targetPosition as THREE.BufferAttribute).set(
+        newPositions
+      );
+      geometry.attributes.targetPosition.needsUpdate = true;
+
+      // Reset morph factor to 0, we will animate it to 1 in useFrame
+      if (pointsRef.current.material instanceof THREE.ShaderMaterial) {
+        pointsRef.current.material.uniforms.uMorphFactor.value = 0;
+      }
+
+      prevShapeRef.current = currentShape;
+    }
   }, [currentShape]);
 
   useFrame((state) => {
     const { clock } = state;
-    
-    // Read transient state directly to avoid re-renders
-    const { handTension, handRotation, handPosition, isHandDetected } = useStore.getState();
 
-    if (pointsRef.current && pointsRef.current.material instanceof THREE.ShaderMaterial) {
+    // Read transient state directly to avoid re-renders
+    const { handTension, handRotation, handPosition, isHandDetected } =
+      useStore.getState();
+
+    if (
+      pointsRef.current &&
+      pointsRef.current.material instanceof THREE.ShaderMaterial
+    ) {
       pointsRef.current.material.uniforms.uTime.value = clock.getElapsedTime();
-      
+
       // Smoothly interpolate expansion based on hand tension
-      const currentExpansion = pointsRef.current.material.uniforms.uExpansion.value;
-      pointsRef.current.material.uniforms.uExpansion.value = THREE.MathUtils.lerp(currentExpansion, handTension, 0.1);
-      
+      const currentExpansion =
+        pointsRef.current.material.uniforms.uExpansion.value;
+      pointsRef.current.material.uniforms.uExpansion.value =
+        THREE.MathUtils.lerp(currentExpansion, handTension, 0.1);
+
       // Animate morph factor
-      const currentMorph = pointsRef.current.material.uniforms.uMorphFactor.value;
+      const currentMorph =
+        pointsRef.current.material.uniforms.uMorphFactor.value;
       if (currentMorph < 1) {
-          pointsRef.current.material.uniforms.uMorphFactor.value = Math.min(1, currentMorph + 0.02);
+        pointsRef.current.material.uniforms.uMorphFactor.value = Math.min(
+          1,
+          currentMorph + 0.02
+        );
       }
-      
+
       pointsRef.current.material.uniforms.uColor.value.set(particleColor);
 
       // --- HAND CONTROL TRANSFORMATIONS ---
@@ -158,22 +190,42 @@ export const ParticleSystem = () => {
         // Map hand position X to Rotation Y (yaw)
         // Map hand position Y to Rotation X (pitch)
         // Map hand rotation (roll) to Rotation Z
-        
+
         // Target rotation
         const targetRotY = -handPosition.x * 2; // Multiplier for sensitivity
         const targetRotX = handPosition.y * 2;
         const targetRotZ = handRotation;
 
         // Smooth interpolation
-        pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, targetRotX, 0.1);
-        pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, targetRotY, 0.1);
-        pointsRef.current.rotation.z = THREE.MathUtils.lerp(pointsRef.current.rotation.z, targetRotZ, 0.1);
+        pointsRef.current.rotation.x = THREE.MathUtils.lerp(
+          pointsRef.current.rotation.x,
+          targetRotX,
+          0.1
+        );
+        pointsRef.current.rotation.y = THREE.MathUtils.lerp(
+          pointsRef.current.rotation.y,
+          targetRotY,
+          0.1
+        );
+        pointsRef.current.rotation.z = THREE.MathUtils.lerp(
+          pointsRef.current.rotation.z,
+          targetRotZ,
+          0.1
+        );
       } else {
         // Auto rotation when no hand
         pointsRef.current.rotation.y += 0.005;
         // Return to upright
-        pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, 0, 0.05);
-        pointsRef.current.rotation.z = THREE.MathUtils.lerp(pointsRef.current.rotation.z, 0, 0.05);
+        pointsRef.current.rotation.x = THREE.MathUtils.lerp(
+          pointsRef.current.rotation.x,
+          0,
+          0.05
+        );
+        pointsRef.current.rotation.z = THREE.MathUtils.lerp(
+          pointsRef.current.rotation.z,
+          0,
+          0.05
+        );
       }
     }
   });
